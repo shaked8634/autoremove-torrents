@@ -2,6 +2,8 @@
 import os
 import time
 import re
+from enum import Enum
+
 from . import logger
 from .client.qbittorrent import qBittorrent
 from .client.transmission import Transmission
@@ -10,6 +12,11 @@ from .client.deluge import Deluge
 from .exception.nosuchclient import NoSuchClient
 from .strategy import Strategy
 from autoremovetorrents.torrent import Torrent
+
+
+class ActionType(Enum):
+    NEW_CATEGORY = "new_category"
+    REMOVE_TORRENTS = "remove_torrents"
 
 class Task(object):
     def __init__(self, name, conf, remove_torrents = True):
@@ -37,6 +44,10 @@ class Task(object):
         self._enabled_remove = remove_torrents
         self._delete_data = conf['delete_data'] if 'delete_data' in conf else False
         self._strategies = conf['strategies'] if 'strategies' in conf else []
+
+        self._action_type = ActionType.NEW_CATEGORY if ActionType.NEW_CATEGORY.value in conf else ActionType.REMOVE_TORRENTS
+        if self._action_type == ActionType.NEW_CATEGORY:
+            self._new_category = conf[ActionType.NEW_CATEGORY.value]
 
         # Torrents
         self._torrents = set()
@@ -113,25 +124,32 @@ class Task(object):
             self._remove.update(strategy.remove_list)
 
     # Remove torrents
-    def _remove_torrents(self):
-        # Bulid a dict to store torrent hashes and names which to be deleted
-        delete_list = {}
+    def _handle_torrents(self):
+        # Build a dict to store torrent hashes and names which to be deleted
+        torrent_list = {}
         for torrent in self._remove:
-            delete_list[torrent.hash] = torrent.name
-        # Run deletion
-        success, failed = self._client.remove_torrents([hash_ for hash_ in delete_list], self._delete_data)
-        # Output logs
-        for hash_ in success:
-            self._logger.info(
-                'The torrent %s and its data have been removed.' if self._delete_data \
-                else 'The torrent %s has been removed.',
-                delete_list[hash_]
-            )
-        for torrent in failed:
-            self._logger.error('The torrent %s and its data cannot be removed. Reason: %s' if self._delete_data \
-                else 'The torrent %s cannot be removed. Reason: %s',
-                delete_list[torrent['hash']], torrent['reason']
-            )
+            torrent_list[torrent.hash] = torrent.name
+        # Run action
+        if self._action_type == ActionType.NEW_CATEGORY:
+            success, failed = self._client.change_torrents_category([hash_ for hash_ in torrent_list], self._new_category)
+            for hash_ in success:
+                self._logger.info("The torrent %s category has been changed to '%s'",torrent_list[hash_], self._new_category)
+            for torrent in failed:
+                self._logger.error("The torrent %s category cannot be changed. Reason: %s", torrent_list[torrent['hash']], torrent['reason'])
+        else:  # == Action.REMOVE_TORRENTS
+            success, failed = self._client.remove_torrents([hash_ for hash_ in torrent_list], self._delete_data)
+            # Output logs
+            for hash_ in success:
+                self._logger.info(
+                    'The torrent %s and its data have been removed.' if self._delete_data \
+                    else 'The torrent %s has been removed.',
+                    torrent_list[hash_]
+                )
+            for torrent in failed:
+                self._logger.error('The torrent %s and its data cannot be removed. Reason: %s' if self._delete_data \
+                    else 'The torrent %s cannot be removed. Reason: %s',
+                    torrent_list[torrent['hash']], torrent['reason']
+                )
 
     # Execute
     def execute(self):
@@ -140,7 +158,7 @@ class Task(object):
         self._get_torrents()
         self._apply_strategies()
         if self._enabled_remove:
-            self._remove_torrents()
+            self._handle_torrents()
 
     # Get remaining torrents (for tester)
     def get_remaining_torrents(self):

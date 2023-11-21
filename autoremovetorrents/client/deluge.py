@@ -198,3 +198,6 @@ class Deluge(object):
                         'reason': e.args[0],
                     })
             return (success_hash, failures)
+
+    def change_torrents_category(self, torrent_hash_list, remove_data):
+        return NotImplementedError

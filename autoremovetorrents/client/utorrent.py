@@ -177,3 +177,6 @@ class uTorrent(object):
                 'reason': 'The server responses HTTP %d.' % request.status_code,
             } for torrent in torrent_hash_list])
         return (torrent_hash_list, [])
+
+    def change_torrents_category(self, torrent_hash_list, remove_data):
+        return NotImplementedError

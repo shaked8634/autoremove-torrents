@@ -107,7 +107,12 @@ class qBittorrent(object):
         # Get torrent's tracker
         def torrent_trackers(self, torrent_hash):
             return self._session.get(self._host+'/api/v2/torrents/trackers', params={'hash':torrent_hash})
-        
+
+        # Batch change torrents category
+        def change_torrents_category(self, torrent_hash_list, new_category):
+            return self._session.post(self._host +'/api/v2/torrents/setCategory', data={'hashes':'|'.join(torrent_hash_list),
+                                                                                        'category': new_category})
+
         # Batch Delete torrents
         def delete_torrents(self, torrent_hash_list):
             return self._session.post(self._host+'/api/v2/torrents/delete', data={'hashes':'|'.join(torrent_hash_list), 'deleteFiles': False})
@@ -268,6 +273,17 @@ class qBittorrent(object):
     def remove_torrents(self, torrent_hash_list, remove_data):
         request = self._request_handler.delete_torrents_and_data(torrent_hash_list) if remove_data \
             else self._request_handler.delete_torrents(torrent_hash_list)
+        if request.status_code != 200:
+            return ([], [{
+                'hash': torrent,
+                'reason': 'The server responses HTTP %d.' % request.status_code,
+            } for torrent in torrent_hash_list])
+        # Some of them may fail but we can't judge them,
+        # So we consider all of them as successful.
+        return (torrent_hash_list, [])
+
+    def change_torrents_category(self, torrent_hash_list, new_category):
+        request = self._request_handler.change_torrents_category(torrent_hash_list, new_category)
         if request.status_code != 200:
             return ([], [{
                 'hash': torrent,
