@@ -189,10 +189,11 @@ class qBittorrent(object):
         self._refresh_time = time.time()
         # Get hash for each torrent
         for torrent in result:
-            if torrent.get('state', "") != "moving":
-                torrent_hash.append(torrent['hash'])
-            else:
+            if torrent.get('state') == "moving":
                 self._logger.warning("Torrent %s is in: 'moving' state. It will be ignored." % torrent['hash'])
+            else:
+                torrent_hash.append(torrent['hash'])
+
         return torrent_hash
     
     # Get Torrent Properties
